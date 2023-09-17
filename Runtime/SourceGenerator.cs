@@ -1,0 +1,340 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Peter Bjorklund. All rights reserved.
+ *  Licensed under the MIT License. See LICENSE in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+using System;
+using System.Text;
+
+namespace Piot.CSharpSourceGenerator
+{
+	public class RootScope : IRootScope
+	{
+		ISourceGenerator sourceGenerator;
+
+		public RootScope(ISourceGenerator sourceGenerator)
+		{
+			this.sourceGenerator = sourceGenerator;
+		}
+
+		public void Dispose()
+		{
+		}
+
+		public void Usings(string sourceLines)
+		{
+			sourceGenerator.Lines(sourceLines);
+		}
+
+		public INamespaceScope Namespace(string s)
+		{
+			sourceGenerator.Line("namespace " + s);
+			return new SourceScope(sourceGenerator, s, true);
+		}
+	}
+
+	public class IfScope : IIfScope
+	{
+		private ISourceGenerator sourceGenerator;
+		public readonly SourceScope consequence;
+		public SourceScope alternative;
+
+		public IfScope(ISourceGenerator sourceGenerator, string comment)
+		{
+			this.sourceGenerator = sourceGenerator;
+			consequence = new SourceScope(sourceGenerator);
+		}
+
+		public ISourceScope Consequence => consequence;
+
+		public ISourceScope CreateAlternative()
+		{
+			sourceGenerator.LineCuddle("else");
+			return new SourceScope(sourceGenerator);
+		}
+
+		public void Dispose()
+		{
+
+		}
+	}
+
+	public class SourceScope : ISourceScope, ISwitchScope, IClassScope, INamespaceScope
+	{
+		private ISourceGenerator sourceGenerator;
+		private bool insertBrackets;
+		private string comment;
+
+		public SourceScope(ISourceGenerator sourceGenerator, string comment = "", bool insertBrackets = true)
+		{
+			this.sourceGenerator = sourceGenerator;
+			this.insertBrackets = insertBrackets;
+			this.comment = comment;
+			this.sourceGenerator.IncreaseIndent(insertBrackets);
+		}
+
+		public void Dispose()
+		{
+			sourceGenerator.DecreaseIndent(comment, insertBrackets);
+		}
+
+		private void Command(string command, string s)
+		{
+			InternalLine($"{command} ({s})");
+		}
+
+		private void InternalLine(string s)
+		{
+			sourceGenerator.Line(s);
+		}
+
+		private void LineCuddle(string s)
+		{
+			sourceGenerator.LineCuddle(s);
+		}
+
+		public void Line(string sourceLine)
+		{
+			InternalLine(sourceLine);
+		}
+
+		public void Lines(string sourceLines, string linesComment = "")
+		{
+			sourceGenerator.Lines(sourceLines, linesComment);
+		}
+
+
+		public void Lines(string[] sourceLines)
+		{
+			sourceGenerator.Lines(sourceLines);
+		}
+
+		public ISourceScope For(string s, string forComment = "")
+		{
+			Command("for", s);
+
+			return new SourceScope(sourceGenerator, forComment);
+		}
+
+		public ISourceScope Else(string elseComment = "")
+		{
+			LineCuddle("else");
+
+			return new SourceScope(sourceGenerator, elseComment);
+		}
+
+		public IIfScope If(string s, string ifComment = "")
+		{
+			Command("if", s);
+
+			return new IfScope(sourceGenerator, ifComment);
+		}
+
+
+		public ISourceScope ForEach(string s, string forEachComment = "")
+		{
+			Command("foreach", s);
+
+
+			return new SourceScope(sourceGenerator, forEachComment);
+		}
+
+		public ISourceScope Block(string s = "", string blockComment = "")
+		{
+			if (s.Length > 0)
+			{
+				Line(s);
+			}
+
+			return new SourceScope(sourceGenerator, blockComment);
+		}
+
+		public ISwitchScope Switch(string s, string switchComment = "")
+		{
+			Command("switch", s);
+
+
+			return new SourceScope(sourceGenerator, switchComment);
+		}
+
+		public ISourceScope Case(string s, string caseComment = "", bool useBrackets = false)
+		{
+			InternalLine("case " + s + ":");
+
+			return new SourceScope(sourceGenerator, caseComment, useBrackets);
+		}
+
+		public ISourceScope Default(string defaultComment = "", bool useBrackets = false)
+		{
+			InternalLine("default:");
+
+			return new SourceScope(sourceGenerator, defaultComment, useBrackets);
+		}
+
+		public ISourceScope While(string s, string whileComment = "")
+		{
+			Command("while", s);
+
+
+			return new SourceScope(sourceGenerator, whileComment);
+		}
+
+		public ISourceScope PublicStaticMethod(string s, string methodComment = "public static method")
+		{
+			InternalLine("public static " + s);
+			return new SourceScope(sourceGenerator, methodComment);
+		}
+
+		public IClassScope PublicStaticClass(string s)
+		{
+			InternalLine("public static class " + s);
+			return new SourceScope(sourceGenerator, "public static class ");
+		}
+
+
+		public INamespaceScope Namespace(string s)
+		{
+			InternalLine("namespace " + s);
+			return new SourceScope(sourceGenerator, "namespace " + s);
+		}
+	}
+
+	public class SourceGenerator : ISourceGenerator
+	{
+		private StringBuilder sb = new StringBuilder();
+		private uint indent;
+		private string indentString = "    ";
+		private bool shouldCuddleLine = true;
+
+
+		public SourceGenerator()
+		{
+			sb.Append(@"//------------------------------------------------------------------------------
+// <auto-generated>
+// Generated file, do not edit!
+// </auto-generated>
+//------------------------------------------------------------------------------
+");
+		}
+
+		public void IncreaseIndent(bool insertActualBrackets = true)
+		{
+			shouldCuddleLine = true;
+
+			if (insertActualBrackets)
+			{
+				InternalLine("{");
+			}
+
+			indent++;
+		}
+
+		public void DecreaseIndent(string comment = "", bool insertActualBrackets = true)
+		{
+			indent--;
+
+			shouldCuddleLine = true;
+
+			if (insertActualBrackets)
+			{
+				if (comment != string.Empty)
+				{
+					InternalLine($"}} // {comment}");
+				}
+				else
+				{
+					InternalLine("}");
+				}
+			}
+
+			shouldCuddleLine = false;
+		}
+
+		public static string RepeatString(string s, uint count)
+		{
+			var result = string.Empty;
+
+			for (var i = 0; i < count; i++)
+				result += s;
+
+			return result;
+		}
+
+		public void LineCuddle(string s)
+		{
+			InternalLine(s);
+
+			shouldCuddleLine = false;
+		}
+
+		public void Line(string s)
+		{
+			if (!shouldCuddleLine)
+			{
+				EmptyLine();
+				shouldCuddleLine = true;
+			}
+
+			InternalLine(s);
+
+			shouldCuddleLine = false;
+		}
+
+
+		public void Lines(string[] lines)
+		{
+			foreach (var line in lines)
+			{
+				Line(line);
+				shouldCuddleLine = true;
+			}
+
+			shouldCuddleLine = false;
+		}
+
+		public void Lines(string sourceLines, string comment = "")
+		{
+			var strings = sourceLines.Trim().Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
+			if (!string.IsNullOrEmpty(comment))
+			{
+				Line("// " + comment);
+				shouldCuddleLine = true;
+			}
+			Lines(strings);
+		}
+
+
+		public static string TrimLineEndingsAndSpacesBeforeAndAfter(string s)
+		{
+			return TrimLineEndings(s).Trim();
+		}
+
+		public static string TrimLineEndings(string s)
+		{
+			if (string.IsNullOrEmpty(s))
+			{
+				return s;
+			}
+
+			return s.Replace("\r\n", string.Empty)
+				.Replace("\n", string.Empty)
+				.Replace("\r", string.Empty);
+		}
+
+		private void InternalLine(string s)
+		{
+			sb.Append("\n").Append(RepeatString(indentString, indent));
+			sb.Append(TrimLineEndingsAndSpacesBeforeAndAfter(s));
+		}
+
+		public void EmptyLine()
+		{
+			sb.Append("\n");
+		}
+
+		public string String()
+		{
+			return sb.ToString();
+		}
+	}
+}

@@ -1,0 +1,19 @@
+{
+    "name": "com.outbreakstudios.csharp-source-generator",
+    "version": "0.0.1",
+    "description": "API to generate C# code",
+    "displayName": "C# Source Generator",
+    "author": {
+        "name": "Outbreak Studios",
+        "email": "info@outbreakstudios.com",
+        "url": "https://outbreakstudios.com"
+    },
+    "changelogUrl": "https://github.com/piot/csharp-source-generator/blob/main/CHANGELOG.md",
+    "dependencies": [],
+    "documentationUrl": "https://github.com/piot/csharp-source-generator/blob/main/README.md",
+    "keywords": [
+        "generator"
+    ],
+    "license": "MIT",
+    "licensesUrl": "https://github.com/piot/csharp-source-generator/blob/main/LICENSE"
+}
